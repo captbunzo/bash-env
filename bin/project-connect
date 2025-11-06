@@ -1,0 +1,40 @@
+#!/bin/bash
+
+#
+# project-connect - Connect to a project workspace using screen sessions
+#
+# Part of bash-env: Custom Bash Environment Tools
+# Copyright (c) 2025 Paul Thompson
+# Licensed under MIT License - see LICENSE file for details
+#
+# Description: This script creates or connects to a screen session for a given
+# project directory. It supports optional app subdirectories within projects.
+#
+# Usage: project-connect <project> [app]
+#
+
+project=$1
+app=$2
+
+if [ -z $project ]; then
+	echo "USAGE: connect-project <project> [app]" >&2
+	return
+fi
+
+session_name=$project$([ -n "$app" ] && echo ":$app")
+project_dir=~/src/$project
+target_dir=$project_dir$([ -n "$app" ] && echo "/apps/$app")
+
+if [ ! -d $project_dir ]; then
+	echo "ERROR: Project directory does not exist -- $target_dir" >&2
+	return
+fi
+
+if [ ! -d $target_dir ]; then
+	echo "ERROR: App directory does not exist -- $target_dir" >&2
+	return
+fi
+
+screen -ls $session_name &&
+	screen -rd $session_name ||
+	(cd $target_dir && screen -S $session_name)
