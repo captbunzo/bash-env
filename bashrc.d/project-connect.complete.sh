@@ -3,7 +3,7 @@
 #
 # project-connect.complete.sh - Bash completion for project-connect script
 #
-# Part of bash-env: Custom Bash Environment Tools
+# Part of bash-tools: Custom Bash Environment Tools
 # Copyright (c) 2025 Paul Thompson
 # Licensed under MIT License - see LICENSE file for details
 #

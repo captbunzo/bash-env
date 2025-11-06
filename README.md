@@ -1,4 +1,4 @@
-# bash-env
+# bash-tools
 
 My Custom Bash Environment Tools
 
@@ -18,13 +18,13 @@ This repository contains a collection of custom bash scripts and configurations 
 1. Clone this repository to your preferred location:
 
    ```bash
-   git clone https://github.com/captbunzo/bash-env.git ~/bash-env
+   git clone https://github.com/captbunzo/bash-tools.git ~/bash-tools
    ```
 
 2. Add the following line to your `~/.bashrc`:
 
    ```bash
-   source ~/bash-env/bashrc
+   source ~/bash-tools/bashrc
    ```
 
 3. Reload your bash configuration:
@@ -55,7 +55,7 @@ project-connect mywebapp frontend
 ## Project Structure
 
 ```
-bash-env/
+bash-tools/
 ├── bashrc                           # Main configuration entry point
 ├── bin/                             # Executable scripts
 │   └── project-connect              # Project workspace connector
