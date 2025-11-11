@@ -1,78 +1,76 @@
 # bash-tools
 
-My Custom Bash Environment Tools
+My fun and occasionally useful collection of bash tools and scripts.
+
+## Author
+
+Paul Thompson
+- Discord: [captbunzo](https://discord.com/users/211955406535131136)
+- Email: captbunzo@gmail.com
+- LinkedIn: https://linkedin.com/in/paulthompson
 
 ## Overview
 
-This repository contains a collection of custom bash scripts and configurations designed to enhance productivity in development environments. The toolkit provides utilities for project management, screen session handling, and bash completion.
+A hodgepodge of custom bash utilities I've built over time. Some are genuinely useful, others are just for fun. Feel free to use whatever you find interesting!
 
-## Features
+## What's in here
 
-- **Project Connection**: Easily connect to project workspaces using screen sessions
-- **Tab Completion**: Intelligent bash completion for project and app navigation
-- **Modular Design**: Organized structure with separate configuration files
-- **PATH Integration**: Automatic addition of custom scripts to your PATH
+- **[project-connect](docs/project-connect.md)**: Jump into project workspaces with screen sessions
+- **[randomize-grub-theme](docs/randomize-grub-theme.md)**: Because who doesn't want a surprise boot theme?
 
-## Installation
+Both tools include tab completion and other niceties to make them actually usable.
 
-1. Clone this repository to your preferred location:
+## Quick Start
 
-   ```bash
-   git clone https://github.com/captbunzo/bash-tools.git ~/bash-tools
-   ```
-
-2. Add the following line to your `~/.bashrc`:
-
-   ```bash
-   source ~/bash-tools/bashrc
-   ```
-
-3. Reload your bash configuration:
-   ```bash
-   source ~/.bashrc
-   ```
-
-## Usage
-
-### project-connect
-
-Connect to a project workspace using screen sessions:
+Clone it somewhere:
 
 ```bash
-project-connect <project> [app]
+git clone https://github.com/captbunzo/bash-tools.git ~/bash-tools
 ```
 
-- `project`: Name of the project directory in `~/src/`
-- `app`: Optional app subdirectory within the project
-
-Examples:
+Add this to your `~/.bashrc`:
 
 ```bash
-project-connect mywebapp
-project-connect mywebapp frontend
+source ~/bash-tools/bashrc
 ```
+
+Reload your bash:
+```bash
+source ~/.bashrc
+```
+
+Then check out the individual tool docs for usage details.
 
 ## Project Structure
 
 ```
 bash-tools/
-├── bashrc                           # Main configuration entry point
-├── bin/                             # Executable scripts
-│   └── project-connect              # Project workspace connector
-├── bashrc.d/                        # Modular configuration files
-│   └── project-connect.complete.sh  # Bash completion for project-connect
-├── LICENSE                          # MIT License
-└── README.md                        # This file
+├── bashrc                               # Main configuration entry point
+├── bin/                                 # Executable scripts
+│   ├── project-connect                  # Project workspace connector
+│   └── randomize-grub-theme             # GRUB theme randomizer
+├── bashrc.d/                            # Modular configuration files
+│   └── project-connect.complete.sh      # Bash completion for project-connect
+├── docs/                                # Documentation
+│   ├── project-connect.md               # project-connect documentation
+│   └── randomize-grub-theme.md          # randomize-grub-theme documentation
+├── systemd/                             # Systemd service files
+│   ├── system/                          # Service definitions
+│   │   └── randomize-grub-theme.service # Service for automatic theme randomization
+│   ├── install-service.sh               # Install systemd service
+│   └── uninstall-service.sh             # Uninstall systemd service
+├── LICENSE                              # MIT License
+└── README.md                            # This file
 ```
 
 ## Contributing
 
-Feel free to submit issues and pull requests to improve this toolkit.
+Found a bug? Have an idea? Feel free to open an issue or send a pull request.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - do whatever you want with this stuff.
 
-## Author
+## Copyright
 
-Paul Thompson
+Copyright (c) 2025 Paul Thompson

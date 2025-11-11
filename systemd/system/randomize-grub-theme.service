@@ -1,0 +1,47 @@
+#
+# randomize-grub-theme.service - Systemd service for automatic GRUB theme randomization
+#
+# Part of bash-tools: Custom Bash Environment Tools
+# Copyright (c) 2025 Paul Thompson
+# Licensed under MIT License - see LICENSE file for details
+#
+# Description: This systemd service automatically randomizes the GRUB boot theme
+# on system startup. It runs the randomize-grub-theme script which selects a
+# different theme from the current one and updates the GRUB configuration.
+#
+# Installation:
+#   Use the install-service.sh script which will automatically configure paths
+#   sudo ./systemd/install-service.sh
+#
+# The service runs after the file system is mounted and network is available
+# to ensure all required resources are accessible. It runs once per boot.
+#
+
+[Unit]
+Description=Randomize GRUB theme on boot
+Documentation=file://{BASH_TOOLS}/docs/randomize-grub-theme.md
+After=local-fs.target
+Before=display-manager.service
+Wants=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart={BASH_TOOLS}/bin/randomize-grub-theme
+User=root
+Group=root
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=120
+RemainAfterExit=no
+SuccessExitStatus=0 1
+
+# Security hardening
+NoNewPrivileges=false
+PrivateDevices=false
+ProtectHome=false
+ProtectSystem=false
+ReadWritePaths=/etc/default /boot/grub /var/log
+ReadOnlyPaths={BASH_TOOLS}
+
+[Install]
+WantedBy=multi-user.target

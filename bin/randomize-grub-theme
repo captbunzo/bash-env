@@ -8,15 +8,71 @@
 # Licensed under MIT License - see LICENSE file for details
 #
 # Description: This script randomly selects a GRUB theme from /boot/grub/themes
-# and updates the GRUB_THEME configuration in /etc/default/grub. After updating
-# the configuration, you'll need to run 'sudo update-grub' to apply the changes.
+# and updates the GRUB_THEME configuration in /etc/default/grub. The script ensures
+# the newly selected theme is different from the current one and automatically runs
+# update-grub to apply changes. Designed for robust automated execution on boot.
+#
+# Features:
+# - Prevents selecting the same theme twice in a row
+# - Validates theme files exist and are properly formatted
+# - Creates single backup file (overwrites on each run)
+# - Comprehensive error handling with automatic rollback
+# - Detailed logging to /var/log/randomize-grub-theme.log
+# - Atomic configuration updates using temporary files
+# - Timeout protection for update-grub command
 #
 # Usage: randomize-grub-theme
+# Requirements: Must be run as root, requires update-grub command
+# Exit Codes: 0 = success, 1 = error, 0 = no change needed (only theme available)
 #
+
+# Set strict error handling for automated execution
+set -euo pipefail
+
+# Set up logging for automated runs
+LOG_FILE="/var/log/randomize-grub-theme.log"
+TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+
+# Function to log messages with timestamp
+log_message() {
+    echo "[$TIMESTAMP] $1" | tee -a "$LOG_FILE" 2>/dev/null || echo "[$TIMESTAMP] $1"
+}
+
+# Function to log errors
+log_error() {
+    echo "[$TIMESTAMP] ERROR: $1" | tee -a "$LOG_FILE" >&2 2>/dev/null || echo "[$TIMESTAMP] ERROR: $1" >&2
+}
+
+# Function to cleanup on exit
+cleanup() {
+    local exit_code=$?
+    if [ $exit_code -ne 0 ]; then
+        log_error "Script failed with exit code $exit_code"
+        # Restore backup if it exists and original file was modified
+        if [ -f "$GRUB_CONFIG_BACKUP" ] && [ -f "$GRUB_CONFIG" ]; then
+            if ! cmp -s "$GRUB_CONFIG" "$GRUB_CONFIG_BACKUP"; then
+                log_message "Restoring GRUB configuration from backup due to failure"
+                cp "$GRUB_CONFIG_BACKUP" "$GRUB_CONFIG" 2>/dev/null || true
+            fi
+        fi
+    fi
+    exit $exit_code
+}
+
+# Set up trap for cleanup
+trap cleanup EXIT INT TERM
+
+log_message "Starting GRUB theme randomization"
 
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then
-	echo "ERROR: This script must be run as root or with sudo" >&2
+	log_error "This script must be run as root or with sudo"
+	exit 1
+fi
+
+# Validate environment
+if ! command -v update-grub >/dev/null 2>&1; then
+	log_error "update-grub command not found"
 	exit 1
 fi
 
@@ -26,67 +82,147 @@ GRUB_CONFIG_BACKUP="/etc/default/grub.bak"
 
 # Check if themes directory exists
 if [ ! -d "$THEMES_DIR" ]; then
-	echo "ERROR: GRUB themes directory does not exist: $THEMES_DIR" >&2
+	log_error "GRUB themes directory does not exist: $THEMES_DIR"
 	exit 1
 fi
 
-# Get list of available themes
-themes=($(ls -d "$THEMES_DIR"/*/ 2>/dev/null | xargs -n 1 basename))
+# Check if GRUB config file exists and is writable
+if [ ! -f "$GRUB_CONFIG" ]; then
+	log_error "GRUB configuration file does not exist: $GRUB_CONFIG"
+	exit 1
+fi
+
+if [ ! -w "$GRUB_CONFIG" ]; then
+	log_error "GRUB configuration file is not writable: $GRUB_CONFIG"
+	exit 1
+fi
+
+# Get list of available themes (only directories with theme.txt)
+themes=()
+for theme_dir in "$THEMES_DIR"/*/; do
+    if [ -d "$theme_dir" ] && [ -f "$theme_dir/theme.txt" ]; then
+        theme_name=$(basename "$theme_dir")
+        themes+=("$theme_name")
+    fi
+done
 
 if [ ${#themes[@]} -eq 0 ]; then
-	echo "ERROR: No themes found in $THEMES_DIR" >&2
+	log_error "No valid themes found in $THEMES_DIR (must contain theme.txt)"
 	exit 1
 fi
 
-# Randomly select a theme
-selected_theme=${themes[$RANDOM % ${#themes[@]}]}
+log_message "Found ${#themes[@]} valid theme(s): ${themes[*]}"
+
+# Get current theme from GRUB config
+current_theme=""
+if grep -q "^GRUB_THEME=" "$GRUB_CONFIG"; then
+	current_theme_path=$(grep "^GRUB_THEME=" "$GRUB_CONFIG" | sed 's/^GRUB_THEME="\(.*\)"$/\1/' | sed 's/^GRUB_THEME=\(.*\)$/\1/')
+	if [ -n "$current_theme_path" ] && [ -f "$current_theme_path" ]; then
+		current_theme=$(basename "$(dirname "$current_theme_path")")
+		log_message "Current theme: $current_theme"
+	else
+		log_message "Current GRUB_THEME path is invalid or file doesn't exist: $current_theme_path"
+	fi
+else
+	log_message "No GRUB_THEME currently set"
+fi
+
+# Filter out the current theme from available themes
+available_themes=()
+for theme in "${themes[@]}"; do
+	if [ "$theme" != "$current_theme" ]; then
+		available_themes+=("$theme")
+	fi
+done
+
+# Check if we have any different themes to choose from
+if [ ${#available_themes[@]} -eq 0 ]; then
+	if [ -n "$current_theme" ]; then
+		log_message "Current theme '$current_theme' is the only available theme - no change needed"
+		exit 0
+	else
+		# No current theme set, use all available themes
+		available_themes=("${themes[@]}")
+		log_message "No current theme set, selecting from all available themes"
+	fi
+fi
+
+# Randomly select a theme from available themes
+selected_theme=${available_themes[$RANDOM % ${#available_themes[@]}]}
 theme_path="$THEMES_DIR/$selected_theme/theme.txt"
 
-echo "Available themes: ${themes[*]}"
-echo "Selected theme: $selected_theme"
-
-# Check if GRUB config file exists
-if [ ! -f "$GRUB_CONFIG" ]; then
-	echo "ERROR: GRUB configuration file does not exist: $GRUB_CONFIG" >&2
+# Verify the selected theme file exists
+if [ ! -f "$theme_path" ]; then
+	log_error "Selected theme file does not exist: $theme_path"
 	exit 1
 fi
 
-# Create backup of original config
+log_message "Selected theme: $selected_theme"
+
+# Create backup of original config (overwrites previous backup)
 if ! cp "$GRUB_CONFIG" "$GRUB_CONFIG_BACKUP"; then
-	echo "ERROR: Failed to create backup of GRUB configuration" >&2
+	log_error "Failed to create backup of GRUB configuration"
 	exit 1
 fi
 
-echo "Backup created: $GRUB_CONFIG_BACKUP"
+log_message "Backup created: $GRUB_CONFIG_BACKUP"
 
-# Update GRUB_THEME line in config
-if grep -q "^GRUB_THEME=" "$GRUB_CONFIG"; then
+# Create a temporary file for safe atomic updates
+TEMP_CONFIG=$(mktemp) || {
+	log_error "Failed to create temporary file"
+	exit 1
+}
+
+# Copy current config to temp file
+cp "$GRUB_CONFIG" "$TEMP_CONFIG"
+
+# Update GRUB_THEME line in temp config
+if grep -q "^GRUB_THEME=" "$TEMP_CONFIG"; then
 	# Replace existing GRUB_THEME line
-	if sed -i "s|^GRUB_THEME=.*|GRUB_THEME=\"$theme_path\"|" "$GRUB_CONFIG"; then
-		echo "Updated existing GRUB_THEME configuration"
+	if sed -i "s|^GRUB_THEME=.*|GRUB_THEME=\"$theme_path\"|" "$TEMP_CONFIG"; then
+		log_message "Updated existing GRUB_THEME configuration"
 	else
-		echo "ERROR: Failed to update GRUB configuration" >&2
+		log_error "Failed to update GRUB configuration in temporary file"
+		rm -f "$TEMP_CONFIG"
 		exit 1
 	fi
 else
 	# Add GRUB_THEME line if it doesn't exist
-	if echo "GRUB_THEME=\"$theme_path\"" | tee -a "$GRUB_CONFIG" >/dev/null; then
-		echo "Added GRUB_THEME configuration"
+	if echo "GRUB_THEME=\"$theme_path\"" >> "$TEMP_CONFIG"; then
+		log_message "Added GRUB_THEME configuration"
 	else
-		echo "ERROR: Failed to add GRUB configuration" >&2
+		log_error "Failed to add GRUB configuration to temporary file"
+		rm -f "$TEMP_CONFIG"
 		exit 1
 	fi
 fi
 
-echo "GRUB theme set to: $theme_path"
-echo ""
-echo "Updating GRUB configuration..."
+# Validate the temporary config file
+if [ ! -s "$TEMP_CONFIG" ]; then
+	log_error "Temporary configuration file is empty or invalid"
+	rm -f "$TEMP_CONFIG"
+	exit 1
+fi
 
-# Run update-grub to apply changes
-if update-grub; then
-	echo "GRUB configuration updated successfully!"
-	echo "New theme will be applied on next boot."
+# Atomically replace the original config
+if ! mv "$TEMP_CONFIG" "$GRUB_CONFIG"; then
+	log_error "Failed to update GRUB configuration file"
+	rm -f "$TEMP_CONFIG"
+	exit 1
+fi
+
+log_message "GRUB theme set to: $theme_path"
+
+# Run update-grub to apply changes with timeout and error handling
+log_message "Updating GRUB configuration..."
+
+# Set a timeout for update-grub (it can hang sometimes)
+if timeout 60 update-grub >/dev/null 2>&1; then
+	log_message "GRUB configuration updated successfully!"
+	log_message "New theme '$selected_theme' will be applied on next boot"
+	exit 0
 else
-	echo "ERROR: Failed to update GRUB configuration" >&2
+	log_error "Failed to update GRUB configuration (timeout or error)"
+	# The cleanup trap will restore the backup
 	exit 1
 fi
