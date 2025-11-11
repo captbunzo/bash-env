@@ -1,0 +1,92 @@
+#!/bin/bash
+
+#
+# randomize-grub-theme - Randomly select and apply a GRUB theme
+#
+# Part of bash-tools: Custom Bash Environment Tools
+# Copyright (c) 2025 Paul Thompson
+# Licensed under MIT License - see LICENSE file for details
+#
+# Description: This script randomly selects a GRUB theme from /boot/grub/themes
+# and updates the GRUB_THEME configuration in /etc/default/grub. After updating
+# the configuration, you'll need to run 'sudo update-grub' to apply the changes.
+#
+# Usage: randomize-grub-theme
+#
+
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then
+	echo "ERROR: This script must be run as root or with sudo" >&2
+	exit 1
+fi
+
+THEMES_DIR="/boot/grub/themes"
+GRUB_CONFIG="/etc/default/grub"
+GRUB_CONFIG_BACKUP="/etc/default/grub.bak"
+
+# Check if themes directory exists
+if [ ! -d "$THEMES_DIR" ]; then
+	echo "ERROR: GRUB themes directory does not exist: $THEMES_DIR" >&2
+	exit 1
+fi
+
+# Get list of available themes
+themes=($(ls -d "$THEMES_DIR"/*/ 2>/dev/null | xargs -n 1 basename))
+
+if [ ${#themes[@]} -eq 0 ]; then
+	echo "ERROR: No themes found in $THEMES_DIR" >&2
+	exit 1
+fi
+
+# Randomly select a theme
+selected_theme=${themes[$RANDOM % ${#themes[@]}]}
+theme_path="$THEMES_DIR/$selected_theme/theme.txt"
+
+echo "Available themes: ${themes[*]}"
+echo "Selected theme: $selected_theme"
+
+# Check if GRUB config file exists
+if [ ! -f "$GRUB_CONFIG" ]; then
+	echo "ERROR: GRUB configuration file does not exist: $GRUB_CONFIG" >&2
+	exit 1
+fi
+
+# Create backup of original config
+if ! cp "$GRUB_CONFIG" "$GRUB_CONFIG_BACKUP"; then
+	echo "ERROR: Failed to create backup of GRUB configuration" >&2
+	exit 1
+fi
+
+echo "Backup created: $GRUB_CONFIG_BACKUP"
+
+# Update GRUB_THEME line in config
+if grep -q "^GRUB_THEME=" "$GRUB_CONFIG"; then
+	# Replace existing GRUB_THEME line
+	if sed -i "s|^GRUB_THEME=.*|GRUB_THEME=\"$theme_path\"|" "$GRUB_CONFIG"; then
+		echo "Updated existing GRUB_THEME configuration"
+	else
+		echo "ERROR: Failed to update GRUB configuration" >&2
+		exit 1
+	fi
+else
+	# Add GRUB_THEME line if it doesn't exist
+	if echo "GRUB_THEME=\"$theme_path\"" | tee -a "$GRUB_CONFIG" >/dev/null; then
+		echo "Added GRUB_THEME configuration"
+	else
+		echo "ERROR: Failed to add GRUB configuration" >&2
+		exit 1
+	fi
+fi
+
+echo "GRUB theme set to: $theme_path"
+echo ""
+echo "Updating GRUB configuration..."
+
+# Run update-grub to apply changes
+if update-grub; then
+	echo "GRUB configuration updated successfully!"
+	echo "New theme will be applied on next boot."
+else
+	echo "ERROR: Failed to update GRUB configuration" >&2
+	exit 1
+fi
